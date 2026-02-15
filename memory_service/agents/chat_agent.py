@@ -3,16 +3,19 @@ from datetime import datetime
 from dataclasses import dataclass
 from typing import Literal
 import os
+import uuid
 from prompt_toolkit import PromptSession
 from prompt_toolkit.history import InMemoryHistory
 
-# Configure Gemini
+from database.connection import get_db
+from database.repository import MessageRepository
+
 api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
 
 genai.configure(api_key=api_key)
 
 @dataclass
-class Message:
+class ChatMessage:
     role: Literal["user", "assistant"]
     content: str
     timestamp: datetime = None
@@ -22,20 +25,42 @@ class Message:
             self.timestamp = datetime.now()
 
 class ChatAgent:
-    def __init__(self, model_name: str = "gemini-2.0-flash", context_window: int = 20):
+    def __init__(self, model_name: str = "gemini-2.0-flash", context_window: int = 20, thread_id: uuid.UUID = None):
         self.model = genai.GenerativeModel(model_name)
-        self.messages: list[Message] = []
         self.context_window = context_window
+        self.thread_id = thread_id or uuid.uuid4()
         self.system_prompt = """You are a helpful assistant. Have natural conversations with the user. 
 Be friendly, informative, and remember context from the conversation."""
+        
+        # Load existing messages from DB if resuming a thread
+        self.messages: list[ChatMessage] = []
+        self._load_thread_history()
+    
+    def _load_thread_history(self):
+        """Load previous messages from the database for this thread"""
+        with get_db() as db:
+            repo = MessageRepository(db)
+            db_messages = repo.get_recent_messages(self.thread_id, limit=self.context_window)
+            for msg in db_messages:
+                self.messages.append(ChatMessage(
+                    role=msg.role,
+                    content=msg.content,
+                    timestamp=msg.timestamp
+                ))
     
     def _get_recent_context(self) -> list[dict]:
         recent = self.messages[-self.context_window:]
         return [{"role": m.role, "parts": [m.content]} for m in recent]
     
     def _save_message(self, role: str, content: str):
-        msg = Message(role=role, content=content)
+        """Save message to both in-memory list and database"""
+        msg = ChatMessage(role=role, content=content)
         self.messages.append(msg)
+        
+        with get_db() as db:
+            repo = MessageRepository(db)
+            repo.save_message(thread_id=self.thread_id, role=role, content=content)
+        
         return msg
     
     def respond(self, user_input: str) -> str:
@@ -52,11 +77,13 @@ Be friendly, informative, and remember context from the conversation."""
 
 
 def main():
-    agent = ChatAgent()
+    thread_id = uuid.uuid4()
+    agent = ChatAgent(thread_id=thread_id)
     
     session = PromptSession(history=InMemoryHistory())
     
     print("Memory Chat (type 'quit' to exit)")
+    print(f"Thread ID: {thread_id}")
     print("Use ↑/↓ arrows to navigate through your message history")
     print("-" * 50)
     
@@ -79,3 +106,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
