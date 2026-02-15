@@ -8,7 +8,7 @@ This project implements a modular, memory-augmented architecture:
 
 ```mermaid
 graph TD
-    User((User)) <--> Main[main.py<br/>(Orchestrator)]
+    User((User)) <--> Main["main.py<br/>(Orchestrator)"]
 
     subgraph "Agent Layer"
         Main --injects--> Chat[ChatAgent]
@@ -19,13 +19,13 @@ graph TD
     end
 
     subgraph "External Services"
-        Gemini[Gemini API<br/>(LLM)]
-        Docker[Docker Container<br/>(RLM Sandbox)]
+        Gemini["Gemini API<br/>(LLM)"]
+        Docker["Docker Container<br/>(RLM Sandbox)"]
     end
 
     subgraph "Data Persistence"
-        Postgres[(PostgreSQL<br/>Chat History)]
-        MDKeys[Markdown Files<br/>(Long-term Memory)]
+        Postgres[("PostgreSQL<br/>Chat History")]
+        MDKeys["Markdown Files<br/>(Long-term Memory)"]
     end
 
     %% Flows
