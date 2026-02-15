@@ -1,4 +1,5 @@
 import os
+import time
 from uuid import uuid4
 import google.generativeai as genai
 from prompt_toolkit import PromptSession
@@ -11,6 +12,8 @@ genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
 
 from agents.chat_agent import ChatAgent
+from agents.router_agent import RouterAgent
+from agents.memory_retriever import MemoryRetriever, SimpleMemoryRetriever
 
 
 def main():
@@ -25,8 +28,17 @@ def main():
     )
     scheduler.start()
     
-    # Initialize chat
-    agent = ChatAgent()
+    # Initialize agents
+    router = RouterAgent()
+    # retrievers
+    # retriever = SimpleMemoryRetriever(memory_dir="./memory")
+    retriever = MemoryRetriever(
+        memory_dir="./memory",
+        backend="gemini",
+        environment="docker"
+    )
+    
+    agent = ChatAgent(router=router, memory_retriever=retriever)
     session = PromptSession(history=InMemoryHistory())
     
     print("Memory Chat")
@@ -46,7 +58,10 @@ def main():
                 scheduler.force_run()
                 continue
             
+            start_time = time.time()
             response = agent.respond(user_input)
+            end_time = time.time()
+            print(f"  [Total Pipeline Duration: {end_time - start_time:.2f}s]")
             print(f"\nAssistant: {response}")
     
     except (KeyboardInterrupt, EOFError):
